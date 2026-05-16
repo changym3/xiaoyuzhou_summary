@@ -67,3 +67,30 @@ A: 使用 uv 同步依赖：
 ```bash
 uv sync
 ```
+
+## Q: 推荐使用哪个入口？
+A: 推荐使用 `main.py` 统一入口，它支持一站式操作：
+```bash
+# 下载 → 转写 → 总结 一站式
+uv run python main.py download --transcribe --summarize <URL>
+
+# 只转写并总结已有音频
+uv run python main.py transcribe --summarize <音频文件>
+
+# 只总结已有文本
+uv run python main.py summarize <文本文件>
+```
+
+## Q: 程序会重复执行已完成的步骤吗？
+A: 不会！所有命令都支持智能跳过：
+- 如果音频已下载，跳过下载
+- 如果转写已完成，跳过转写
+- 如果总结已生成，跳过总结
+删除对应的文件即可强制重新执行。
+
+## Q: 遇到 "未设置 LLM_API_KEY" 错误怎么办？
+A: 请检查：
+1. 项目目录下是否有 `.env` 文件
+2. `.env` 文件中是否设置了 `LLM_API_KEY`
+3. `.env` 文件是否在 `/Users/bytedance/trading/asr_project/` 目录下
+4. 或者使用命令行参数直接传入：`--api-key your_key_here`
