@@ -1,0 +1,2 @@
+# 文档解析
+以https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1?s=eyJ1IjoiNjJkZGQ5ZjhlZGNlNjcxMDRhMWQ4ODJjIn0%3D为例，可以发现，m4a文件的url来源于<meta property="og:audio" content="https://media.xyzcdn.net/lqn6R7YN24GjK_U8j-_6zQEqYexY.m4a">，匹配这里的url即可获取到m4a文件的url，并下载该文件当当前目录
