@@ -3,10 +3,12 @@ import argparse
 import os
 import json
 from faster_whisper import WhisperModel
+from summarize_text import summarize_file, load_env
 
 
 def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu', compute_type='int8',
-                     output_formats=['txt', 'srt', 'json'], output_dir=None, word_timestamps=True, vad_filter=True):
+                     output_formats=['txt', 'srt', 'json'], output_dir=None, word_timestamps=True, vad_filter=True,
+                     summarize=False, summarize_prompt=None):
     """
     使用 faster-whisper 转写音频文件
     
@@ -20,6 +22,8 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
         output_dir: 输出目录 (默认同音频目录)
         word_timestamps: 是否输出词级时间戳
         vad_filter: 是否使用 VAD 过滤静音
+        summarize: 是否在转写完成后进行总结
+        summarize_prompt: 自定义总结提示词
     
     Returns:
         list: 输出文件路径列表
@@ -117,6 +121,21 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
         output_files.append(json_path)
         print(f'已保存: {json_path}')
     
+    if summarize and 'txt' in output_formats:
+        api_key, base_url, model = load_env()
+        if api_key:
+            txt_path = os.path.join(output_dir, f'{base_name}.txt')
+            summary_path, _ = summarize_file(
+                txt_path,
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                prompt=summarize_prompt
+            )
+            output_files.append(summary_path)
+        else:
+            print('⚠️  未设置 LLM_API_KEY，跳过总结')
+    
     return output_files
 
 
@@ -136,6 +155,8 @@ def main():
     parser.add_argument('--output-dir', help='输出目录 (默认同音频目录)')
     parser.add_argument('--no-word-timestamps', action='store_true', help='不输出词级时间戳')
     parser.add_argument('--no-vad-filter', action='store_true', help='不使用 VAD 过滤静音')
+    parser.add_argument('--summarize', action='store_true', help='转写完成后使用大模型进行总结')
+    parser.add_argument('--summarize-prompt', help='自定义总结提示词')
     
     args = parser.parse_args()
     
@@ -149,7 +170,9 @@ def main():
             output_formats=args.output_formats,
             output_dir=args.output_dir,
             word_timestamps=not args.no_word_timestamps,
-            vad_filter=not args.no_vad_filter
+            vad_filter=not args.no_vad_filter,
+            summarize=args.summarize,
+            summarize_prompt=args.summarize_prompt
         )
         print('✅ 转写完成')
     except Exception as e:

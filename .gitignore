@@ -9,7 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
-.references
+references/
+
+# Environment variables
+.env
 
 # Output files
 outputs/
