@@ -34,7 +34,7 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
     txt_path = os.path.join(output_dir, f'{base_name}.txt')
     if os.path.exists(txt_path) and not override:
         print(f'✅ 转写文件已存在，跳过转写: {txt_path}')
-        return [os.path.join(output_dir, f'{base_name}.{ext}') for ext in output_formats if os.path.exists(os.path.join(output_dir, f'{base_name}.{ext}'))
+        return [os.path.join(output_dir, f'{base_name}.{ext}') for ext in output_formats if os.path.exists(os.path.join(output_dir, f'{base_name}.{ext}'))]
     
     print(f'正在加载模型: {model_size}')
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
