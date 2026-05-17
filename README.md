@@ -5,12 +5,13 @@
 ## 功能特性
 
 - 🎧 **播客下载**：从小宇宙播客页面下载 m4a 音频文件
-- 📝 **语音转写**：使用 faster-whisper 进行本地语音转写
+- 📝 **语音转写**：使用 faster-whisper 进行本地语音转写（无 token 限制）
 - 🤖 **智能总结**：通过大模型 API（支持 Deepseek、OpenAI 等）自动总结转写内容
 - 📂 **智能组织**：按播客名称自动创建文件夹整理文件
-- 📄 **多格式输出**：支持 TXT、SRT、JSON 三种输出格式
+- 📄 **多格式输出**：转写支持 TXT、SRT、JSON、Markdown 四种格式，总结输出为 Markdown
 - ⚡ **灵活配置**：支持多种模型大小和转写参数调整
 - 🛡️ **智能跳过**：自动检测并跳过已完成的下载、转写或总结
+- 🏗️ **清晰架构**：职责分离，各模块独立可复用
 
 ## 安装
 
@@ -41,84 +42,75 @@ cp .env.example .env
 # 默认已配置好 Deepseek 的 base URL 和模型
 ```
 
+## 架构设计
+
+### 职责分离
+每个模块单一职责，互不依赖：
+- **download_from_url.py**：只负责下载播客音频
+- **transcribe_audio.py**：只负责音频转写（无 token 限制）
+- **summarize_text.py**：只负责文本总结
+- **main.py**：统一调度入口，支持独立使用和流水线处理
+
 ## 使用方法
 
-### 架构设计
-- **职责分离**：每个模块单一职责
-- **统一调度**：main.py 负责整体流程
-- **模块独立**：download、transcribe、summarize 互不依赖
+### 方式一：使用 main.py（推荐）
 
-### 1. 仅下载播客（默认）
+#### 1. 独立使用各功能
 
 ```bash
+# 只下载播客
 uv run python main.py download <小宇宙播客URL>
-```
 
-示例：
-```bash
-uv run python main.py download https://www.xiaoyuzhoufm.com/episode/xxx
-```
-
-### 2. 下载并自动转写
-
-```bash
-uv run python main.py download <URL> --transcribe
-```
-
-### 3. 下载、转写并自动总结（推荐一站式）
-
-```bash
-uv run python main.py download <URL> --transcribe --summarize
-```
-
-### 4. 仅转写已有音频文件
-
-```bash
+# 只转写音频
 uv run python main.py transcribe <音频文件路径>
-```
 
-### 5. 转写并总结已有音频
-
-```bash
-uv run python main.py transcribe <音频文件路径> --summarize
-```
-
-### 6. 仅总结已有的文本文件
-
-```bash
+# 只总结文本
 uv run python main.py summarize <文本文件路径>
 ```
 
-### 7. 调整参数
+#### 2. 流水线处理（一站式）
 
 ```bash
-# 下载后自动转写，并指定参数
-uv run python main.py download <URL> --transcribe --model-size tiny
-uv run python main.py download <URL> --transcribe --model-size medium
+# 下载 -> 转写 -> 总结，一键完成
+uv run python main.py pipeline <小宇宙播客URL>
+```
 
-# 独立转写音频文件
-uv run python main.py transcribe <音频文件> --model-size large-v3
+#### 3. 参数调整
 
-# 指定输出格式
-uv run python main.py download <URL> --transcribe --output-formats txt json
+```bash
+# 指定模型大小
+uv run python main.py transcribe <音频文件> --model-size medium
 
 # 自定义输出目录
 uv run python main.py download <URL> --output-dir ./my_podcasts
 
-# 自定义总结提示词
-uv run python main.py download <URL> --transcribe --summarize --summarize-prompt "请用 bullet points 格式总结"
+# 自定义总结提示词和长度
+uv run python main.py summarize <文本文件> --prompt "请用 bullet points 总结" --max-tokens 8000
+
+# 流水线时指定参数
+uv run python main.py pipeline <URL> --model-size large-v3 --summarize-max-tokens 6000
+
+# 强制覆盖已存在文件（不会跳过）
+uv run python main.py download <URL> --override
+uv run python main.py transcribe <音频文件> --override
+uv run python main.py summarize <文本文件> --override
+uv run python main.py pipeline <URL> --override
 ```
 
-### 使用说明
+#### 4. 使用示例
 
-- `download_from_url.py`：**仅下载**的独立脚本
-- `transcribe_audio.py`：**仅转写**的独立模块  
-- `summarize_text.py`：**仅总结**的独立模块
-- `main.py`：**统一调度入口**，支持灵活组合下载、转写和总结
+```bash
+# 示例：处理一期播客（完整流程）
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1
 
-### 直接使用独立模块
+# 示例：强制重新处理（覆盖已存在文件）
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --override
+```
 
-也可以直接调用独立模块：
+### 方式二：直接使用独立模块
+
+各模块也可以独立运行：
+
 ```bash
 # 仅使用下载模块
 uv run python download_from_url.py <URL>
@@ -132,11 +124,14 @@ uv run python summarize_text.py <文本文件>
 
 ## 输出格式
 
-默认输出三种格式到同目录下：
-
+### 转写输出（四种格式）
 1. **TXT**：纯文本，易读性好
-2. **SRT**：字幕格式，带时间戳
-3. **JSON**：完整数据，含词级时间戳和置信度
+2. **Markdown (.md)**：结构化格式，带时间戳标题，便于阅读
+3. **SRT**：字幕格式，带时间戳
+4. **JSON**：完整数据，含词级时间戳和置信度
+
+### 总结输出
+- **Markdown (.md)**：结构化的 Markdown 格式，便于阅读和分享
 
 ## 模型对比
 
@@ -160,10 +155,10 @@ faster-whisper 目前不支持 Apple MPS (Metal) 加速，默认使用 CPU：
 
 ```
 asr_project/
-├── main.py              # 主程序入口
-├── download_from_url.py # 下载模块
-├── transcribe_audio.py  # 转写模块
-├── summarize_text.py    # 总结模块
+├── main.py              # 统一调度入口
+├── download_from_url.py # 下载模块（独立）
+├── transcribe_audio.py  # 转写模块（独立）
+├── summarize_text.py    # 总结模块（独立）
 ├── pyproject.toml       # 项目配置
 ├── uv.lock              # 依赖锁定
 ├── .env.example         # 环境变量配置模板
@@ -181,6 +176,7 @@ asr_project/
 - 默认语言：`zh`（中文）
 - VAD 过滤：默认开启（过滤静音片段）
 - 词级时间戳：默认开启
+- **无 token 限制**：完整转录任意长度的音频
 
 ### 总结配置
 通过 `.env` 文件配置：
@@ -205,7 +201,7 @@ A: 支持 m4a、mp3、wav、flac 等常见格式。
 A: 当前 faster-whisper 不支持 MPS，如需极致性能可考虑 whisper.cpp 或 MLX 框架。
 
 ### Q: 如何使用总结功能？
-A: 需要先配置 `.env` 文件中的 `LLM_API_KEY`，然后使用 `--summarize` 参数即可。
+A: 需要先配置 `.env` 文件中的 `LLM_API_KEY`。
 
 ### Q: 支持哪些大模型？
 A: 支持所有 OpenAI 兼容接口，包括 Deepseek（默认）、OpenAI 等。
@@ -214,7 +210,14 @@ A: 支持所有 OpenAI 兼容接口，包括 Deepseek（默认）、OpenAI 等�
 A: 不会！程序会自动检测文件是否存在，如果存在会跳过对应步骤。
 
 ### Q: 如何强制重新生成？
-A: 删除对应的输出文件即可重新执行。
+A: 使用 `--override` 参数即可强制覆盖已存在的文件并重新执行，例如：
+```bash
+uv run python main.py pipeline <URL> --override
+```
+或者手动删除对应的输出文件也可以。
+
+### Q: 转录有 token 限制吗？
+A: **没有！** 转录功能完全没有 token 限制，可以完整处理任意长度的音频。只有总结功能有 max_tokens 参数（因为 LLM API 有上下文限制）。
 
 ## 技术栈
 

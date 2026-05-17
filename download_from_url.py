@@ -63,7 +63,7 @@ def get_episode_info(page_url):
     return audio_url, podcast_name, episode_title
 
 
-def download_file(url, output_dir='.', filename=None):
+def download_file(url, output_dir='.', filename=None, override=False):
     """下载文件，可指定文件名"""
     if filename is None:
         parsed_url = urlparse(url)
@@ -72,6 +72,11 @@ def download_file(url, output_dir='.', filename=None):
             filename = 'audio.m4a'
     
     output_path = os.path.join(output_dir, filename)
+    
+    # 检查文件是否已存在
+    if os.path.exists(output_path) and not override:
+        print(f'✅ 文件已存在，跳过下载: {output_path}')
+        return output_path
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -102,6 +107,7 @@ def main():
     parser = argparse.ArgumentParser(description='从小宇宙播客页面下载 m4a 音频文件')
     parser.add_argument('url', help='小宇宙播客单集页面 URL')
     parser.add_argument('-o', '--output-dir', default='outputs', help='输出目录（默认：outputs）')
+    parser.add_argument('--override', action='store_true', help='覆盖已存在的文件')
     
     args = parser.parse_args()
     
@@ -123,7 +129,7 @@ def main():
         print(f'创建播客文件夹: {podcast_folder}')
         
         # 下载音频到播客文件夹
-        download_file(audio_url, podcast_folder, filename)
+        download_file(audio_url, podcast_folder, filename, override=args.override)
         
     except Exception as e:
         print(f'❌ 错误: {e}')

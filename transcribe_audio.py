@@ -3,12 +3,10 @@ import argparse
 import os
 import json
 from faster_whisper import WhisperModel
-from summarize_text import summarize_file, load_env
 
 
 def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu', compute_type='int8',
-                     output_formats=['txt', 'srt', 'json'], output_dir=None, word_timestamps=True, vad_filter=True,
-                     summarize=False, summarize_prompt=None):
+                     output_formats=['txt', 'srt', 'json', 'md'], output_dir=None, word_timestamps=True, vad_filter=True, override=False):
     """
     使用 faster-whisper 转写音频文件
     
@@ -18,12 +16,11 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
         language: 语言代码 (zh, en, etc.)
         device: 计算设备 (cpu, cuda, auto)
         compute_type: 计算类型 (int8, float16, etc.)
-        output_formats: 输出格式列表 (txt, srt, json)
-        output_dir: 输出目录 (默认同音频目录)
+        output_formats: 输出格式列表 (txt, srt, json, md)
+        output_dir: 输出目录 (默认同音频目录
         word_timestamps: 是否输出词级时间戳
         vad_filter: 是否使用 VAD 过滤静音
-        summarize: 是否在转写完成后进行总结
-        summarize_prompt: 自定义总结提示词
+        override: 是否覆盖已存在的文件
     
     Returns:
         list: 输出文件路径列表
@@ -33,6 +30,12 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
     
     base_name = os.path.splitext(os.path.basename(audio_path))[0]
     
+    # 检查是否需要跳过
+    txt_path = os.path.join(output_dir, f'{base_name}.txt')
+    if os.path.exists(txt_path) and not override:
+        print(f'✅ 转写文件已存在，跳过转写: {txt_path}')
+        return [os.path.join(output_dir, f'{base_name}.{ext}') for ext in output_formats if os.path.exists(os.path.join(output_dir, f'{base_name}.{ext}'))
+    
     print(f'正在加载模型: {model_size}')
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
     
@@ -40,7 +43,7 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
     
     vad_params = dict(min_silence_duration_ms=500) if vad_filter else None
     
-    segments, info = model.transcribe(
+    segments_generator, info = model.transcribe(
         audio_path,
         language=language,
         beam_size=3,
@@ -50,7 +53,28 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
         vad_parameters=vad_params
     )
     
-    segments = list(segments)
+    # 获取音频总时长
+    total_duration = info.duration if hasattr(info, 'duration') else None
+    
+    # 收集所有 segments 并显示进度
+    segments = []
+    print('正在处理音频...', end='', flush=True)
+    for i, segment in enumerate(segments_generator, 1):
+        segments.append(segment)
+        
+        # 显示进度
+        if total_duration:
+            progress = min(segment.end / total_duration, 1.0)
+            percent = progress * 100
+            print(f'\r处理中... {percent:.1f}%', end='', flush=True)
+        else:
+            if i % 10 == 0:
+                print(f'\r已处理 {i} 个片段...', end='', flush=True)
+    
+    if total_duration:
+        print(f'\r处理完成！100.0%')
+    else:
+        print(f'\r处理完成！共 {len(segments)} 个片段')
     
     print(f'检测到语言: {info.language} (置信度: {info.language_probability:.2f})')
     
@@ -64,6 +88,25 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
                 f.write(segment.text.strip() + '\n')
         output_files.append(txt_path)
         print(f'已保存: {txt_path}')
+    
+    # 输出 Markdown
+    if 'md' in output_formats:
+        md_path = os.path.join(output_dir, f'{base_name}.md')
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(f'# {base_name}\n\n')
+            f.write(f'**音频文件**: {os.path.basename(audio_path)}\n\n')
+            f.write(f'**转写语言**: {info.language}\n\n')
+            f.write(f'**置信度**: {info.language_probability:.2%}\n\n')
+            f.write('---\n\n')
+            for i, segment in enumerate(segments, 1):
+                total_seconds = segment.start
+                hours = int(total_seconds // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                seconds = int(total_seconds % 60)
+                start_time = f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+                f.write(f'### [{start_time}]\n\n{segment.text.strip()}\n\n')
+        output_files.append(md_path)
+        print(f'已保存: {md_path}')
     
     # 输出 SRT
     if 'srt' in output_formats:
@@ -121,21 +164,6 @@ def transcribe_audio(audio_path, model_size='small', language='zh', device='cpu'
         output_files.append(json_path)
         print(f'已保存: {json_path}')
     
-    if summarize and 'txt' in output_formats:
-        api_key, base_url, model = load_env()
-        if api_key:
-            txt_path = os.path.join(output_dir, f'{base_name}.txt')
-            summary_path, _ = summarize_file(
-                txt_path,
-                api_key=api_key,
-                base_url=base_url,
-                model=model,
-                prompt=summarize_prompt
-            )
-            output_files.append(summary_path)
-        else:
-            print('⚠️  未设置 LLM_API_KEY，跳过总结')
-    
     return output_files
 
 
@@ -143,20 +171,19 @@ def main():
     parser = argparse.ArgumentParser(description='使用 faster-whisper 转写音频文件')
     parser.add_argument('audio_path', help='音频文件路径')
     parser.add_argument('--model-size', default='small', choices=['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3'],
-                        help='模型大小 (默认: small)')
-    parser.add_argument('--language', default='zh', help='语言代码 (默认: zh)')
+                        help='模型大小 (默认：small)')
+    parser.add_argument('--language', default='zh', help='语言代码 (默认：zh)')
     parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda', 'auto'],
-                        help='计算设备 (默认: cpu)')
+                        help='计算设备 (默认：cpu)')
     parser.add_argument('--compute-type', default='int8', choices=['int8', 'int8_float16', 'float16', 'float32'],
-                        help='计算类型 (默认: int8)')
-    parser.add_argument('--output-formats', nargs='+', default=['txt', 'srt', 'json'],
-                        choices=['txt', 'srt', 'json'],
-                        help='输出格式 (默认: txt srt json)')
+                        help='计算类型 (默认：int8)')
+    parser.add_argument('--output-formats', nargs='+', default=['txt', 'srt', 'json', 'md'],
+                        choices=['txt', 'srt', 'json', 'md'],
+                        help='输出格式 (默认：txt srt json md)')
     parser.add_argument('--output-dir', help='输出目录 (默认同音频目录)')
     parser.add_argument('--no-word-timestamps', action='store_true', help='不输出词级时间戳')
     parser.add_argument('--no-vad-filter', action='store_true', help='不使用 VAD 过滤静音')
-    parser.add_argument('--summarize', action='store_true', help='转写完成后使用大模型进行总结')
-    parser.add_argument('--summarize-prompt', help='自定义总结提示词')
+    parser.add_argument('--override', action='store_true', help='覆盖已存在的文件')
     
     args = parser.parse_args()
     
@@ -171,8 +198,7 @@ def main():
             output_dir=args.output_dir,
             word_timestamps=not args.no_word_timestamps,
             vad_filter=not args.no_vad_filter,
-            summarize=args.summarize,
-            summarize_prompt=args.summarize_prompt
+            override=args.override
         )
         print('✅ 转写完成')
     except Exception as e:
