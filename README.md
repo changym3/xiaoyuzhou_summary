@@ -99,27 +99,62 @@ uv run python main.py pipeline <URL> --override
 
 #### 4. 使用示例
 
+**以《Vol.84 利乐的"垄断式成功"》为例：**
+
 ```bash
-# 示例：处理一期播客（完整流程）
+# 示例1：完整流程（下载 -> 转写 -> 总结）
 uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1
 
-# 示例：强制重新处理（覆盖已存在文件）
+# 示例2：仅下载播客
+uv run python main.py download https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1
+
+# 示例3：仅转写已下载的音频
+uv run python main.py transcribe 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".m4a'
+
+# 示例4：仅总结已转写的文本
+uv run python main.py summarize 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".txt'
+
+# 示例5：使用不同模型大小
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --model-size tiny      # 快速预览
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --model-size small     # 默认推荐（平衡速度与质量）
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --model-size medium    # 高质量转写
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --model-size large-v3  # 极致质量
+
+# 示例6：自定义总结参数
+uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --summarize-max-tokens 8000
+
+# 示例7：强制重新处理（覆盖已存在文件）
 uv run python main.py pipeline https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --override
+
+# 示例8：分步处理（先下载，后转写，最后总结）
+uv run python main.py download https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1
+uv run python main.py transcribe 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".m4a'
+uv run python main.py summarize 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".txt'
 ```
 
 ### 方式二：直接使用独立模块
 
 各模块也可以独立运行：
 
+**以《Vol.84 利乐的"垄断式成功"》为例：**
+
 ```bash
 # 仅使用下载模块
-uv run python download_from_url.py <URL>
+uv run python download_from_url.py https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1
 
 # 仅使用转写模块
-uv run python transcribe_audio.py <音频文件>
+uv run python transcribe_audio.py 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".m4a'
+
+# 仅使用转写模块（使用tiny模型，快速预览）
+uv run python transcribe_audio.py 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".m4a' --model-size tiny
 
 # 仅使用总结模块
-uv run python summarize_text.py <文本文件>
+uv run python summarize_text.py 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".txt'
+
+# 强制覆盖已存在文件
+uv run python download_from_url.py https://www.xiaoyuzhoufm.com/episode/63508299a526d88c703891a1 --override
+uv run python transcribe_audio.py 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".m4a' --override
+uv run python summarize_text.py 'outputs/商业就是这样/Vol.84 利乐的"垄断式成功".txt' --override
 ```
 
 ## 输出格式
